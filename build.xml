@@ -1,7 +1,16 @@
-<project name="HelloWorld" default="run" basedir=".">
+<project name="HelloWorld" default="test" basedir=".">
 
     <property name="src.dir" value="src"/>
+    <property name="test.dir" value="test"/>
     <property name="build.dir" value="build"/>
+    <property name="lib.dir" value="lib"/>
+
+    <path id="classpath">
+        <fileset dir="${lib.dir}">
+            <include name="*.jar"/>
+        </fileset>
+        <pathelement path="${build.dir}"/>
+    </path>
 
     <target name="clean">
         <delete dir="${build.dir}"/>
@@ -12,12 +21,21 @@
         <javac srcdir="${src.dir}" destdir="${build.dir}"/>
     </target>
 
-    <target name="run" depends="compile">
-        <java classname="HelloWorld" fork="true">
-            <classpath>
-                <pathelement path="${build.dir}"/>
-            </classpath>
-        </java>
+    <target name="compile-test" depends="compile">
+        <javac srcdir="${test.dir}" destdir="${build.dir}">
+            <classpath refid="classpath"/>
+        </javac>
+    </target>
+
+    <target name="test" depends="compile-test">
+        <junit printsummary="yes" haltonfailure="true">
+            <classpath refid="classpath"/>
+            <batchtest>
+                <fileset dir="${test.dir}">
+                    <include name="*Test.java"/>
+                </fileset>
+            </batchtest>
+        </junit>
     </target>
 
 </project>
