@@ -1,4 +1,4 @@
-name: Ant CI Full
+name: Ant CI Full with EvoSuite First
 
 on:
   push:
@@ -10,26 +10,49 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout repository
+      # 1️⃣ Checkout repo
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Set up Java
+      # 2️⃣ Set up Java
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
-      # Install Ant + tools
+      # 3️⃣ Install Ant + tools
       - name: Install Ant, wget, unzip
         run: sudo apt-get update && sudo apt-get install -y ant wget unzip
 
-      # Run JUnit tests
-      - name: Run JUnit Tests
-        run: ant test
+      # 4️⃣ Download EvoSuite
+      - name: Download EvoSuite
+        run: wget https://github.com/EvoSuite/evosuite/releases/download/v1.1.0/evosuite-1.1.0.jar -O evosuite.jar
 
-      # PMD setup
+      # 5️⃣ Compile student code
+      - name: Compile student code
+        run: ant compile
+
+      # 6️⃣ Generate EvoSuite tests for all classes
+      - name: Generate EvoSuite tests
+        run: |
+          mkdir -p evosuite-tests
+          for class_file in build/*.class; do
+            class_name=$(basename "$class_file" .class)
+            java -jar evosuite.jar -class "$class_name" -projectCP build -Dsearch_budget=60 -Doutput_dir=evosuite-tests
+          done
+
+      # 7️⃣ Compile EvoSuite tests
+      - name: Compile EvoSuite tests
+        run: javac -cp "build:evosuite-tests:junit-4.13.2.jar:hamcrest-core-1.3.jar" evosuite-tests/*.java -d build-evosuite
+
+      # 8️⃣ Run JUnit tests (student + EvoSuite tests)
+      - name: Run JUnit Tests
+        run: |
+          mkdir -p build/test-results
+          ant -Dtest.classpath="build:build-evosuite:junit-4.13.2.jar:hamcrest-core-1.3.jar" test
+
+      # 9️⃣ PMD setup
       - name: Download PMD
         run: |
           wget https://github.com/pmd/pmd/releases/download/pmd_releases/7.0.0/pmd-dist-7.0.0-bin.zip
@@ -45,7 +68,7 @@ jobs:
             -f xml \
             -r reports/pmd.xml || true
 
-      # Checkstyle setup
+      # 🔟 Checkstyle setup
       - name: Download Checkstyle
         run: |
           wget https://github.com/checkstyle/checkstyle/releases/download/checkstyle-10.12.4/checkstyle-10.12.4-all.jar
@@ -56,10 +79,9 @@ jobs:
           mkdir -p reports
           java -jar checkstyle.jar \
             -c /google_checks.xml \
-            -f xml \
-            -o reports/checkstyle.xml src || true
+            -f xml -o reports/checkstyle.xml src || true
 
-      # Set up Python
+      # 1️⃣1️⃣ Set up Python
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -71,35 +93,33 @@ jobs:
               pip install -r requirements.txt
           fi
 
-      # Run grading script
+      # 1️⃣2️⃣ Run grading script
       - name: Run grading script
         run: python grade.py
 
-      # Upload grading reports
+      # 1️⃣3️⃣ Upload grading reports
       - name: Upload grading feedback
         uses: actions/upload-artifact@v4
         with:
           name: grading-feedback
           path: reports/
 
-      # Send feedback email with attachment
+      # 1️⃣4️⃣ Send feedback email with attachment
       - name: Send Feedback Email
-        if: always()  # send even if build fails
+        if: always()  # send even if tests fail
         env:
           GMAIL_USER: alarusie@gmail.com
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
         run: |
           python <<'EOF'
-          import os
-          import re
-          import smtplib
+          import os, re, smtplib
           from email.message import EmailMessage
           from pathlib import Path
 
           gmail_user = os.environ['GMAIL_USER']
           gmail_pass = os.environ['GMAIL_APP_PASSWORD']
 
-          # Extract author username from JavaDoc @author
+          # Extract student from @author
           java_files = Path('src').glob('*.java')
           student_email = None
           for java_file in java_files:
@@ -119,24 +139,16 @@ jobs:
           msg['Subject'] = 'Automated Grading Feedback'
           msg['From'] = gmail_user
           msg['To'] = student_email
-          msg.set_content(
-              "Hello,\n\nYour automated grading feedback is attached.\n\nRegards,\nDr. Imhmed"
-          )
+          msg.set_content("Hello,\n\nYour automated grading feedback is attached.\n\nRegards,\nCS Instructor")
 
-          # Attach feedback file (for example feedback.md)
-          feedback_path = Path('reports/feedback.md')
-          if feedback_path.exists():
-              with open(feedback_path, 'rb') as f:
+          # Attach feedback files
+          reports_path = Path('reports')
+          for report_file in reports_path.glob('*'):
+              with open(report_file, 'rb') as f:
                   data = f.read()
-                  msg.add_attachment(data, maintype='text', subtype='plain', filename='feedback.md')
-          else:
-              # fallback: attach PMD/Checkstyle XML
-              for xml_file in Path('reports').glob('*.xml'):
-                  with open(xml_file, 'rb') as f:
-                      data = f.read()
-                      msg.add_attachment(data, maintype='application', subtype='xml', filename=xml_file.name)
+                  msg.add_attachment(data, maintype='application', subtype='octet-stream', filename=report_file.name)
 
-          # Send email via Gmail SMTP
+          # Send email
           with smtplib.SMTP('smtp.gmail.com', 587) as server:
               server.starttls()
               server.login(gmail_user, gmail_pass)

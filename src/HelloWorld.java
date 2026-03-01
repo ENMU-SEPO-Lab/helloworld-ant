@@ -1,16 +1,22 @@
 /**
  * HelloWorld example for CI testing.
- * 
+ *
  * @author essa.imhmed
  */
-
 public class HelloWorld {
 
-    public static String getMessage() {
-        return "Hello, World!";
+    /**
+     * Main method
+     * @param args command-line arguments
+     */
+    public static void main(String[] args) {
+        System.out.println("Hello, world!");
     }
 
-    public static void main(String[] args) {
-        System.out.println(getMessage());
+    /**
+     * Sample method for testing
+     */
+    public int add(int a, int b) {
+        return a + b;
     }
 }

@@ -2,6 +2,7 @@
 
     <property name="src.dir" value="src"/>
     <property name="test.dir" value="test"/>
+    <property name="evosuite.dir" value="evosuite-tests"/>
     <property name="build.dir" value="build"/>
     <property name="lib.dir" value="lib"/>
 
@@ -10,38 +11,52 @@
             <include name="*.jar"/>
         </fileset>
         <pathelement path="${build.dir}"/>
+        <pathelement path="${evosuite.dir}"/>
     </path>
 
+    <!-- Clean build -->
     <target name="clean">
         <delete dir="${build.dir}"/>
+        <delete dir="${evosuite.dir}"/>
     </target>
 
+    <!-- Compile student code -->
     <target name="compile">
         <mkdir dir="${build.dir}"/>
         <javac srcdir="${src.dir}" destdir="${build.dir}"/>
     </target>
 
+    <!-- Compile student test code -->
     <target name="compile-test" depends="compile">
         <javac srcdir="${test.dir}" destdir="${build.dir}">
             <classpath refid="classpath"/>
         </javac>
     </target>
 
-    <target name="test" depends="compile-test">
-        <!-- Make sure reports folder exists -->
-        <mkdir dir="reports/junit"/>
-
-        <junit printsummary="yes" haltonfailure="false">
+    <!-- Compile EvoSuite-generated tests -->
+    <target name="compile-evosuite" depends="compile">
+        <mkdir dir="${evosuite.dir}"/>
+        <javac srcdir="${evosuite.dir}" destdir="${evosuite.dir}">
             <classpath refid="classpath"/>
-            
-            <!-- Save XML reports for grading script -->
-            <formatter type="xml"/>
-            
-            <batchtest todir="reports/junit">
+        </javac>
+    </target>
+
+    <!-- Run JUnit Tests (student + EvoSuite) -->
+    <target name="test" depends="compile-test,compile-evosuite">
+        <mkdir dir="build/test-results"/>
+        <junit printsummary="yes" haltonfailure="false" fork="true">
+            <classpath refid="classpath"/>
+            <batchtest>
+                <!-- Include student tests -->
                 <fileset dir="${test.dir}">
                     <include name="*Test.java"/>
                 </fileset>
+                <!-- Include EvoSuite tests -->
+                <fileset dir="${evosuite.dir}">
+                    <include name="*_ESTest.java"/>
+                </fileset>
             </batchtest>
+            <formatter type="xml"/>
         </junit>
     </target>
 
