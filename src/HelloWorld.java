@@ -1,3 +1,9 @@
+/**
+ * HelloWorld example for CI testing.
+ * 
+ * @author essa.imhmed
+ */
+
 public class HelloWorld {
 
     public static String getMessage() {

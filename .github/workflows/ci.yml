@@ -10,26 +10,26 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout repo
+      # Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Set up Java
+      # Set up Java
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
-      # 3️⃣ Install Ant + tools
+      # Install Ant + tools
       - name: Install Ant, wget, unzip
         run: sudo apt-get update && sudo apt-get install -y ant wget unzip
 
-      # 4️⃣ Run JUnit tests
+      # Run JUnit tests
       - name: Run JUnit Tests
         run: ant test
 
-      # 5️⃣ PMD setup
+      # PMD setup
       - name: Download PMD
         run: |
           wget https://github.com/pmd/pmd/releases/download/pmd_releases/7.0.0/pmd-dist-7.0.0-bin.zip
@@ -45,7 +45,7 @@ jobs:
             -f xml \
             -r reports/pmd.xml || true
 
-      # 6️⃣ Checkstyle setup
+      # Checkstyle setup
       - name: Download Checkstyle
         run: |
           wget https://github.com/checkstyle/checkstyle/releases/download/checkstyle-10.12.4/checkstyle-10.12.4-all.jar
@@ -59,7 +59,7 @@ jobs:
             -f xml \
             -o reports/checkstyle.xml src || true
 
-      # 7️⃣ Set up Python
+      # Set up Python
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -71,51 +71,76 @@ jobs:
               pip install -r requirements.txt
           fi
 
-      # 8️⃣ Run grading script
+      # Run grading script
       - name: Run grading script
         run: python grade.py
 
-      # 9️⃣ Upload grading reports
+      # Upload grading reports
       - name: Upload grading feedback
         uses: actions/upload-artifact@v4
         with:
           name: grading-feedback
           path: reports/
 
-      # 🔟 Send grading feedback email to test address
-      - name: Send Feedback Email (Test)
-        if: always()  # Run even if tests fail
+      # Send feedback email with attachment
+      - name: Send Feedback Email
+        if: always()  # send even if build fails
         env:
           GMAIL_USER: alarusie@gmail.com
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          TO_EMAIL: essa.imhmed@enmu.edu
         run: |
           python <<'EOF'
           import os
+          import re
           import smtplib
           from email.message import EmailMessage
+          from pathlib import Path
 
           gmail_user = os.environ['GMAIL_USER']
           gmail_pass = os.environ['GMAIL_APP_PASSWORD']
-          to_email = os.environ['TO_EMAIL']
 
-          feedback_file = 'reports/feedback.md'
-          try:
-              with open(feedback_file, 'r') as f:
-                  feedback = f.read()
-          except FileNotFoundError:
-              feedback = "No feedback generated. Please check the build logs."
+          # Extract author username from JavaDoc @author
+          java_files = Path('src').glob('*.java')
+          student_email = None
+          for java_file in java_files:
+              with open(java_file, 'r') as f:
+                  content = f.read()
+              match = re.search(r'@author\s+([^\s]+)', content)
+              if match:
+                  student_username = match.group(1)
+                  student_email = f"{student_username}@enmu.edu"
+                  break
 
+          if not student_email:
+              student_email = 'essa.imhmed@enmu.edu'  # fallback for testing
+
+          # Compose email
           msg = EmailMessage()
-          msg['Subject'] = 'Automated Grading Feedback - Test'
+          msg['Subject'] = 'Automated Grading Feedback'
           msg['From'] = gmail_user
-          msg['To'] = to_email
-          msg.set_content(feedback)
+          msg['To'] = student_email
+          msg.set_content(
+              "Hello,\n\nYour automated grading feedback is attached.\n\nRegards,\nCS Instructor"
+          )
 
+          # Attach feedback file (for example feedback.md)
+          feedback_path = Path('reports/feedback.md')
+          if feedback_path.exists():
+              with open(feedback_path, 'rb') as f:
+                  data = f.read()
+                  msg.add_attachment(data, maintype='text', subtype='plain', filename='feedback.md')
+          else:
+              # fallback: attach PMD/Checkstyle XML
+              for xml_file in Path('reports').glob('*.xml'):
+                  with open(xml_file, 'rb') as f:
+                      data = f.read()
+                      msg.add_attachment(data, maintype='application', subtype='xml', filename=xml_file.name)
+
+          # Send email via Gmail SMTP
           with smtplib.SMTP('smtp.gmail.com', 587) as server:
               server.starttls()
               server.login(gmail_user, gmail_pass)
               server.send_message(msg)
 
-          print(f"Test feedback email sent successfully to {to_email}!")
+          print(f"Feedback email sent successfully to {student_email}!")
           EOF
