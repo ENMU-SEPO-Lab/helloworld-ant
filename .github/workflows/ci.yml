@@ -120,7 +120,7 @@ jobs:
           msg['From'] = gmail_user
           msg['To'] = student_email
           msg.set_content(
-              "Hello,\n\nYour automated grading feedback is attached.\n\nRegards,\nCS Instructor"
+              "Hello,\n\nYour automated grading feedback is attached.\n\nRegards,\nDr. Imhmed"
           )
 
           # Attach feedback file (for example feedback.md)
