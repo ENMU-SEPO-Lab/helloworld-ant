@@ -1,0 +1,26 @@
+name: Ant HelloWorld CI
+
+on:
+    push:
+        branches: [ main ]
+    pull_request:
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Set up Java
+              uses: actions/setup-java@v4
+              with:
+                  distribution: temurin
+                  java-version: 17
+
+            - name: Install Ant
+              run: sudo apt-get update && sudo apt-get install -y ant
+
+            - name: Run Ant
+              run: ant run
