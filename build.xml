@@ -74,20 +74,20 @@
 
     <!-- Run all tests -->
     <target name="test" depends="compile-evosuite-tests">
-        <mkdir dir="${reports.dir}"/>
-        <junit printsummary="yes" haltonfailure="false" fork="true">
-            <classpath>
-                <path refid="classpath"/>
-                <pathelement location="evosuite.jar"/>
-            </classpath>
-            <batchtest todir="${reports.dir}">
-                <fileset dir="${evosuite-tests.dir}">
-                    <include name="**/*ESTest.java"/>
-                </fileset>
-            </batchtest>
-            <formatter type="plain" usefile="true"/>
-            <formatter type="xml"/>
-        </junit>
-    </target>
+    <mkdir dir="${reports.dir}/junit"/>
+    <junit printsummary="yes" haltonfailure="false" fork="true">
+        <classpath>
+            <path refid="classpath"/>
+            <pathelement location="evosuite.jar"/>
+        </classpath>
+        <batchtest todir="${reports.dir}/junit">
+            <fileset dir="${evosuite-tests.dir}">
+                <include name="**/*ESTest.java"/>
+            </fileset>
+        </batchtest>
+        <formatter type="plain" usefile="true"/>
+        <formatter type="xml"/>
+    </junit>
+</target>
 
 </project>
