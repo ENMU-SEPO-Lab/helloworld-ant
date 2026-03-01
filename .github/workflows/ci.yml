@@ -21,11 +21,11 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      # 3️⃣ Install Ant + unzip + wget
-      - name: Install Ant and tools
-        run: sudo apt-get update && sudo apt-get install -y ant unzip wget
+      # 3️⃣ Install Ant + tools
+      - name: Install Ant, wget, unzip
+        run: sudo apt-get update && sudo apt-get install -y ant wget unzip
 
-      # 4️⃣ Run JUnit tests via Ant
+      # 4️⃣ Run JUnit tests
       - name: Run JUnit Tests
         run: ant test
 
@@ -59,7 +59,7 @@ jobs:
             -f xml \
             -o reports/checkstyle.xml src || true
 
-      # 7️⃣ Set up Python for grading
+      # 7️⃣ Set up Python
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -82,13 +82,13 @@ jobs:
           name: grading-feedback
           path: reports/
 
-      # 🔟 Send grading feedback email
-      - name: Send Feedback Email
-        if: always()  # Run even if build fails
+      # 🔟 Send grading feedback email to test address
+      - name: Send Feedback Email (Test)
+        if: always()  # Run even if tests fail
         env:
           GMAIL_USER: alarusie@gmail.com
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          TO_EMAIL: alarusie@gmail.com
+          TO_EMAIL: essa.imhmed@enmu.edu
         run: |
           python <<'EOF'
           import os
@@ -99,23 +99,23 @@ jobs:
           gmail_pass = os.environ['GMAIL_APP_PASSWORD']
           to_email = os.environ['TO_EMAIL']
 
-          # Read grading feedback
           feedback_file = 'reports/feedback.md'
-          with open(feedback_file, 'r') as f:
-              feedback = f.read()
+          try:
+              with open(feedback_file, 'r') as f:
+                  feedback = f.read()
+          except FileNotFoundError:
+              feedback = "No feedback generated. Please check the build logs."
 
-          # Compose email
           msg = EmailMessage()
-          msg['Subject'] = 'Automated Grading Feedback'
+          msg['Subject'] = 'Automated Grading Feedback - Test'
           msg['From'] = gmail_user
           msg['To'] = to_email
           msg.set_content(feedback)
 
-          # Send email via Gmail SMTP
           with smtplib.SMTP('smtp.gmail.com', 587) as server:
               server.starttls()
               server.login(gmail_user, gmail_pass)
               server.send_message(msg)
 
-          print("Feedback email sent successfully!")
+          print(f"Test feedback email sent successfully to {to_email}!")
           EOF
