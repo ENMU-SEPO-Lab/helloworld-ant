@@ -1,23 +1,26 @@
 <project name="HelloWorld" default="test" basedir=".">
 
+    <!-- Directories -->
     <property name="src.dir" value="src"/>
-    <property name="test.dir" value="test"/>
-    <property name="evosuite.dir" value="evosuite-tests"/>
     <property name="build.dir" value="build"/>
+    <property name="test.dir" value="test"/>
+    <property name="evosuite-tests.dir" value="evosuite-tests"/>
+    <property name="reports.dir" value="reports"/>
     <property name="lib.dir" value="lib"/>
 
+    <!-- Classpath for compilation and tests -->
     <path id="classpath">
         <fileset dir="${lib.dir}">
             <include name="*.jar"/>
         </fileset>
         <pathelement path="${build.dir}"/>
-        <pathelement path="${evosuite.dir}"/>
     </path>
 
     <!-- Clean build -->
     <target name="clean">
         <delete dir="${build.dir}"/>
-        <delete dir="${evosuite.dir}"/>
+        <delete dir="${evosuite-tests.dir}"/>
+        <delete dir="${reports.dir}"/>
     </target>
 
     <!-- Compile student code -->
@@ -26,36 +29,63 @@
         <javac srcdir="${src.dir}" destdir="${build.dir}"/>
     </target>
 
-    <!-- Compile student test code -->
-    <target name="compile-test" depends="compile">
-        <javac srcdir="${test.dir}" destdir="${build.dir}">
-            <classpath refid="classpath"/>
+    <!-- Generate EvoSuite tests -->
+    <target name="evosuite" depends="compile">
+        <mkdir dir="${evosuite-tests.dir}"/>
+        <fileset dir="${build.dir}" id="class.files">
+            <include name="**/*.class"/>
+        </fileset>
+
+        <pathconvert pathsep="," property="class.list" refid="class.files">
+            <map from="${build.dir}/" to=""/>
+            <mapper type="glob" from="*.class" to="*"/>
+        </pathconvert>
+
+        <java jar="evosuite.jar" fork="true" failonerror="true">
+            <arg value="-class"/>
+            <arg value="${class.list}"/>
+            <arg value="-projectCP"/>
+            <arg value="${build.dir}"/>
+            <arg value="-criterion"/>
+            <arg value="branch"/>
+            <arg value="-Dsearch_budget=30"/>
+            <arg value="-Dminimize=false"/>
+            <arg value="-Dassertion_strategy=all"/>
+            <arg value="-junit"/>
+            <arg value="4"/>
+            <arg value="-Dno_runtime_dependency=true"/>
+            <arg value="-base_dir"/>
+            <arg value="${evosuite-tests.dir}"/>
+        </java>
+    </target>
+
+    <!-- Compile EvoSuite tests -->
+    <target name="compile-evosuite-tests" depends="evosuite">
+        <mkdir dir="${build.dir}"/>
+        <javac destdir="${build.dir}" includeantruntime="false">
+            <classpath>
+                <pathelement location="evosuite.jar"/>
+                <pathelement path="${classpath}"/>
+            </classpath>
+            <src path="${evosuite-tests.dir}"/>
+            <include name="**/*.java"/>
         </javac>
     </target>
 
-    <!-- Compile EvoSuite-generated tests -->
-    <target name="compile-evosuite" depends="compile">
-        <mkdir dir="${evosuite.dir}"/>
-        <javac srcdir="${evosuite.dir}" destdir="${evosuite.dir}">
-            <classpath refid="classpath"/>
-        </javac>
-    </target>
-
-    <!-- Run JUnit Tests (student + EvoSuite) -->
-    <target name="test" depends="compile-test,compile-evosuite">
-        <mkdir dir="build/test-results"/>
+    <!-- Run all tests -->
+    <target name="test" depends="compile-evosuite-tests">
+        <mkdir dir="${reports.dir}"/>
         <junit printsummary="yes" haltonfailure="false" fork="true">
-            <classpath refid="classpath"/>
-            <batchtest>
-                <!-- Include student tests -->
-                <fileset dir="${test.dir}">
-                    <include name="*Test.java"/>
-                </fileset>
-                <!-- Include EvoSuite tests -->
-                <fileset dir="${evosuite.dir}">
-                    <include name="*_ESTest.java"/>
+            <classpath>
+                <path refid="classpath"/>
+                <pathelement location="evosuite.jar"/>
+            </classpath>
+            <batchtest todir="${reports.dir}">
+                <fileset dir="${evosuite-tests.dir}">
+                    <include name="**/*ESTest.java"/>
                 </fileset>
             </batchtest>
+            <formatter type="plain" usefile="true"/>
             <formatter type="xml"/>
         </junit>
     </target>
