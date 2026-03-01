@@ -23,11 +23,26 @@ jobs:
             - name: Run JUnit Tests
               run: ant test
 
-            - name: Install PMD
-              run: sudo apt-get install -y pmd
+            # - name: Install PMD
+            #   run: sudo apt-get install -y pmd
+
+            # - name: Run PMD
+            #   run: pmd check -d src -R rulesets/java/quickstart.xml -f text
+
+            - name: Download PMD
+              run: |
+                  wget https://github.com/pmd/pmd/releases/download/pmd_releases/7.0.0/pmd-dist-7.0.0-bin.zip
+                  unzip pmd-dist-7.0.0-bin.zip
+                  mv pmd-bin-7.0.0 pmd
 
             - name: Run PMD
-              run: pmd check -d src -R rulesets/java/quickstart.xml -f text
+              run: |
+                  mkdir -p reports
+                  ./pmd/bin/pmd check \
+                    -d src \
+                    -R category/java/bestpractices.xml \
+                    -f xml \
+                    -r reports/pmd.xml
 
             - name: Install Checkstyle
               run: sudo apt-get install -y checkstyle
