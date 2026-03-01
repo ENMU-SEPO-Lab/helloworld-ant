@@ -28,9 +28,16 @@
     </target>
 
     <target name="test" depends="compile-test">
-        <junit printsummary="yes" haltonfailure="true">
+        <!-- Make sure reports folder exists -->
+        <mkdir dir="reports/junit"/>
+
+        <junit printsummary="yes" haltonfailure="false">
             <classpath refid="classpath"/>
-            <batchtest>
+            
+            <!-- Save XML reports for grading script -->
+            <formatter type="xml"/>
+            
+            <batchtest todir="reports/junit">
                 <fileset dir="${test.dir}">
                     <include name="*Test.java"/>
                 </fileset>
