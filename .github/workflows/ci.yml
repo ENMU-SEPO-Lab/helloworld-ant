@@ -1,3 +1,55 @@
+# name: Ant CI Full
+
+# on:
+#     push:
+#         branches: [ main ]
+#     pull_request:
+
+# jobs:
+#     build:
+#         runs-on: ubuntu-latest
+
+#         steps:
+#             - uses: actions/checkout@v4
+
+#             - uses: actions/setup-java@v4
+#               with:
+#                   distribution: temurin
+#                   java-version: 17
+
+#             - name: Install Ant
+#               run: sudo apt-get update && sudo apt-get install -y ant
+
+#             - name: Run JUnit Tests
+#               run: ant test
+
+#             # - name: Install PMD
+#             #   run: sudo apt-get install -y pmd
+
+#             # - name: Run PMD
+#             #   run: pmd check -d src -R rulesets/java/quickstart.xml -f text
+
+#             - name: Download PMD
+#               run: |
+#                   wget https://github.com/pmd/pmd/releases/download/pmd_releases/7.0.0/pmd-dist-7.0.0-bin.zip
+#                   unzip pmd-dist-7.0.0-bin.zip
+#                   mv pmd-bin-7.0.0 pmd
+
+#             - name: Run PMD
+#               run: |
+#                   mkdir -p reports
+#                   ./pmd/bin/pmd check \
+#                     -d src \
+#                     -R category/java/bestpractices.xml \
+#                     -f xml \
+#                     -r reports/pmd.xml || true
+
+#             - name: Install Checkstyle
+#               run: sudo apt-get install -y checkstyle
+
+#             - name: Run Checkstyle
+#               run: checkstyle -c /usr/share/checkstyle/sun_checks.xml src
+
 name: Ant CI Full
 
 on:
@@ -10,25 +62,22 @@ jobs:
         runs-on: ubuntu-latest
 
         steps:
-            - uses: actions/checkout@v4
+            - name: Checkout repository
+              uses: actions/checkout@v4
 
-            - uses: actions/setup-java@v4
+            - name: Set up Java
+              uses: actions/setup-java@v4
               with:
                   distribution: temurin
                   java-version: 17
 
             - name: Install Ant
-              run: sudo apt-get update && sudo apt-get install -y ant
+              run: sudo apt-get update && sudo apt-get install -y ant unzip wget
 
             - name: Run JUnit Tests
               run: ant test
 
-            # - name: Install PMD
-            #   run: sudo apt-get install -y pmd
-
-            # - name: Run PMD
-            #   run: pmd check -d src -R rulesets/java/quickstart.xml -f text
-
+            # --- PMD Setup ---
             - name: Download PMD
               run: |
                   wget https://github.com/pmd/pmd/releases/download/pmd_releases/7.0.0/pmd-dist-7.0.0-bin.zip
@@ -44,8 +93,28 @@ jobs:
                     -f xml \
                     -r reports/pmd.xml || true
 
-            - name: Install Checkstyle
-              run: sudo apt-get install -y checkstyle
+            # --- Checkstyle Setup ---
+            - name: Download Checkstyle
+              run: |
+                  wget https://github.com/checkstyle/checkstyle/releases/download/checkstyle-10.12.4/checkstyle-10.12.4-all.jar
+                  mv checkstyle-10.12.4-all.jar checkstyle.jar
 
             - name: Run Checkstyle
-              run: checkstyle -c /usr/share/checkstyle/sun_checks.xml src
+              run: |
+                  mkdir -p reports
+                  java -jar checkstyle.jar -c /google_checks.xml -f xml -o reports/checkstyle.xml src || true
+
+            # --- Python Grading ---
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: '3.11'
+
+            - name: Install Python dependencies
+              run: |
+                  if [ -f requirements.txt ]; then
+                      pip install -r requirements.txt
+                  fi
+
+            - name: Run grading script
+              run: python grade.py
