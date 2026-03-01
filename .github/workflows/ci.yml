@@ -50,71 +50,155 @@
 #             - name: Run Checkstyle
 #               run: checkstyle -c /usr/share/checkstyle/sun_checks.xml src
 
+# name: Ant CI Full
+
+# on:
+#     push:
+#         branches: [ main ]
+#     pull_request:
+
+# jobs:
+#     build:
+#         runs-on: ubuntu-latest
+
+#         steps:
+#             - name: Checkout repository
+#               uses: actions/checkout@v4
+
+#             - name: Set up Java
+#               uses: actions/setup-java@v4
+#               with:
+#                   distribution: temurin
+#                   java-version: 17
+
+#             - name: Install Ant
+#               run: sudo apt-get update && sudo apt-get install -y ant unzip wget
+
+#             - name: Run JUnit Tests
+#               run: ant test
+
+#             # --- PMD Setup ---
+#             - name: Download PMD
+#               run: |
+#                   wget https://github.com/pmd/pmd/releases/download/pmd_releases/7.0.0/pmd-dist-7.0.0-bin.zip
+#                   unzip pmd-dist-7.0.0-bin.zip
+#                   mv pmd-bin-7.0.0 pmd
+
+#             - name: Run PMD
+#               run: |
+#                   mkdir -p reports
+#                   ./pmd/bin/pmd check \
+#                     -d src \
+#                     -R category/java/bestpractices.xml \
+#                     -f xml \
+#                     -r reports/pmd.xml || true
+
+#             # --- Checkstyle Setup ---
+#             - name: Download Checkstyle
+#               run: |
+#                   wget https://github.com/checkstyle/checkstyle/releases/download/checkstyle-10.12.4/checkstyle-10.12.4-all.jar
+#                   mv checkstyle-10.12.4-all.jar checkstyle.jar
+
+#             - name: Run Checkstyle
+#               run: |
+#                   mkdir -p reports
+#                   java -jar checkstyle.jar -c /google_checks.xml -f xml -o reports/checkstyle.xml src || true
+
+#             # --- Python Grading ---
+#             - name: Set up Python
+#               uses: actions/setup-python@v5
+#               with:
+#                   python-version: '3.11'
+
+#             - name: Install Python dependencies
+#               run: |
+#                   if [ -f requirements.txt ]; then
+#                       pip install -r requirements.txt
+#                   fi
+
+#             - name: Run grading script
+#               run: python grade.py
+
 name: Ant CI Full
 
 on:
-    push:
-        branches: [ main ]
-    pull_request:
+  push:
+    branches: [ main ]
+  pull_request:
 
 jobs:
-    build:
-        runs-on: ubuntu-latest
+  build:
+    runs-on: ubuntu-latest
 
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
+    steps:
+      # 1️⃣ Checkout repo
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-            - name: Set up Java
-              uses: actions/setup-java@v4
-              with:
-                  distribution: temurin
-                  java-version: 17
+      # 2️⃣ Set up Java
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
 
-            - name: Install Ant
-              run: sudo apt-get update && sudo apt-get install -y ant unzip wget
+      # 3️⃣ Install Ant + unzip + wget
+      - name: Install Ant and tools
+        run: sudo apt-get update && sudo apt-get install -y ant unzip wget
 
-            - name: Run JUnit Tests
-              run: ant test
+      # 4️⃣ Run JUnit tests via Ant
+      - name: Run JUnit Tests
+        run: ant test
 
-            # --- PMD Setup ---
-            - name: Download PMD
-              run: |
-                  wget https://github.com/pmd/pmd/releases/download/pmd_releases/7.0.0/pmd-dist-7.0.0-bin.zip
-                  unzip pmd-dist-7.0.0-bin.zip
-                  mv pmd-bin-7.0.0 pmd
+      # 5️⃣ PMD setup
+      - name: Download PMD
+        run: |
+          wget https://github.com/pmd/pmd/releases/download/pmd_releases/7.0.0/pmd-dist-7.0.0-bin.zip
+          unzip pmd-dist-7.0.0-bin.zip
+          mv pmd-bin-7.0.0 pmd
 
-            - name: Run PMD
-              run: |
-                  mkdir -p reports
-                  ./pmd/bin/pmd check \
-                    -d src \
-                    -R category/java/bestpractices.xml \
-                    -f xml \
-                    -r reports/pmd.xml || true
+      - name: Run PMD
+        run: |
+          mkdir -p reports
+          ./pmd/bin/pmd check \
+            -d src \
+            -R category/java/bestpractices.xml \
+            -f xml \
+            -r reports/pmd.xml || true
 
-            # --- Checkstyle Setup ---
-            - name: Download Checkstyle
-              run: |
-                  wget https://github.com/checkstyle/checkstyle/releases/download/checkstyle-10.12.4/checkstyle-10.12.4-all.jar
-                  mv checkstyle-10.12.4-all.jar checkstyle.jar
+      # 6️⃣ Checkstyle setup
+      - name: Download Checkstyle
+        run: |
+          wget https://github.com/checkstyle/checkstyle/releases/download/checkstyle-10.12.4/checkstyle-10.12.4-all.jar
+          mv checkstyle-10.12.4-all.jar checkstyle.jar
 
-            - name: Run Checkstyle
-              run: |
-                  mkdir -p reports
-                  java -jar checkstyle.jar -c /google_checks.xml -f xml -o reports/checkstyle.xml src || true
+      - name: Run Checkstyle
+        run: |
+          mkdir -p reports
+          java -jar checkstyle.jar \
+            -c /google_checks.xml \
+            -f xml \
+            -o reports/checkstyle.xml src || true
 
-            # --- Python Grading ---
-            - name: Set up Python
-              uses: actions/setup-python@v5
-              with:
-                  python-version: '3.11'
+      # 7️⃣ Set up Python for grading
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-            - name: Install Python dependencies
-              run: |
-                  if [ -f requirements.txt ]; then
-                      pip install -r requirements.txt
-                  fi
+      - name: Install Python dependencies
+        run: |
+          if [ -f requirements.txt ]; then
+              pip install -r requirements.txt
+          fi
 
-            - name: Run grading script
-              run: python grade.py
+      # 8️⃣ Run grading script
+      - name: Run grading script
+        run: python grade.py
+
+      # 9️⃣ Upload grading reports
+      - name: Upload grading feedback
+        uses: actions/upload-artifact@v4
+        with:
+          name: grading-feedback
+          path: reports/
