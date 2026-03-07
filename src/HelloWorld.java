@@ -1,7 +1,7 @@
 /**
  * HelloWorld example for CI testing.
  *
- * @author essa.imhmed
+ * @author ludwig.scherer
  */
 public class HelloWorld {
 
