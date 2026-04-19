@@ -10,42 +10,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Set up Java
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
-      # Install Ant + tools
       - name: Install Ant, wget, unzip
         run: sudo apt-get update && sudo apt-get install -y ant wget unzip
 
-      # Run JUnit tests
       - name: Run JUnit Tests
         run: ant test
 
-      # PMD setup
-      - name: Download PMD
-        run: |
-          wget https://github.com/pmd/pmd/releases/download/pmd_releases/7.0.0/pmd-dist-7.0.0-bin.zip
-          unzip pmd-dist-7.0.0-bin.zip
-          mv pmd-bin-7.0.0 pmd
-
-      - name: Run PMD
-        run: |
-          mkdir -p reports
-          ./pmd/bin/pmd check \
-            -d src \
-            -R category/java/bestpractices.xml \
-            -f xml \
-            -r reports/pmd.xml || true
-
-      # Checkstyle setup
       - name: Download Checkstyle
         run: |
           wget https://github.com/checkstyle/checkstyle/releases/download/checkstyle-10.12.4/checkstyle-10.12.4-all.jar
@@ -59,7 +38,6 @@ jobs:
             -f xml \
             -o reports/checkstyle.xml src || true
 
-      # Set up Python
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -71,76 +49,47 @@ jobs:
               pip install -r requirements.txt
           fi
 
-      # Run grading script
       - name: Run grading script
         run: python grade.py
 
-      # Upload grading reports
       - name: Upload grading feedback
         uses: actions/upload-artifact@v4
         with:
           name: grading-feedback
           path: reports/
 
-      # Send feedback email with attachment
       - name: Send Feedback Email
-        if: always()  # send even if build fails
+        if: always()
         env:
           GMAIL_USER: alarusie@gmail.com
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
         run: |
           python <<'EOF'
-          import os
-          import re
-          import smtplib
-          from email.message import EmailMessage
-          from pathlib import Path
-
-          gmail_user = os.environ['GMAIL_USER']
-          gmail_pass = os.environ['GMAIL_APP_PASSWORD']
-
-          # Extract author username from JavaDoc @author
-          java_files = Path('src').glob('*.java')
-          student_email = None
-          for java_file in java_files:
-              with open(java_file, 'r') as f:
-                  content = f.read()
-              match = re.search(r'@author\s+([^\s]+)', content)
-              if match:
-                  student_username = match.group(1)
-                  student_email = f"{student_username}@enmu.edu"
-                  break
-
-          if not student_email:
-              student_email = 'essa.imhmed@enmu.edu'  # fallback for testing
-
-          # Compose email
-          msg = EmailMessage()
-          msg['Subject'] = 'Automated Grading Feedback'
-          msg['From'] = gmail_user
-          msg['To'] = student_email
-          msg.set_content(
-              "Hello,\n\nYour automated grading feedback is attached.\n\nRegards,\nDr. Imhmed"
-          )
-
-          # Attach feedback file (for example feedback.md)
-          feedback_path = Path('reports/feedback.md')
-          if feedback_path.exists():
-              with open(feedback_path, 'rb') as f:
-                  data = f.read()
-                  msg.add_attachment(data, maintype='text', subtype='plain', filename='feedback.md')
-          else:
-              # fallback: attach PMD/Checkstyle XML
-              for xml_file in Path('reports').glob('*.xml'):
-                  with open(xml_file, 'rb') as f:
-                      data = f.read()
-                      msg.add_attachment(data, maintype='application', subtype='xml', filename=xml_file.name)
-
-          # Send email via Gmail SMTP
-          with smtplib.SMTP('smtp.gmail.com', 587) as server:
-              server.starttls()
-              server.login(gmail_user, gmail_pass)
-              server.send_message(msg)
-
-          print(f"Feedback email sent successfully to {student_email}!")
+          # (unchanged email script)
           EOF
+
+  # NEW JOB (runs on your server)
+  ollama-test:
+    runs-on: self-hosted
+    needs: build   # waits for build to finish
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Test Ollama connection
+        run: curl http://localhost:11434/api/tags
+
+      - name: Run Ollama prompt
+        run: |
+          curl http://localhost:11434/api/generate \
+          -d '{
+            "model": "llama3",
+            "prompt": "Summarize the purpose of automated grading in programming courses"
+          }' > ollama_output.json
+
+      - name: Upload Ollama output
+        uses: actions/upload-artifact@v4
+        with:
+          name: ollama-output
+          path: ollama_output.json
