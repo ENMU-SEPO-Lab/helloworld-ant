@@ -68,11 +68,11 @@ jobs:
       - name: Test Ollama connection
         run: curl http://localhost:11434/api/tags
 
-      - name: Run Ollama prompt
+      - name: Run phi3.5 prompt
         run: |
           curl http://localhost:11434/api/generate \
           -d '{
-            "model": "llama3",
+            "model": "phi3.5",
             "prompt": "Summarize the purpose of automated grading in programming courses"
           }' > ollama_output.json
 
