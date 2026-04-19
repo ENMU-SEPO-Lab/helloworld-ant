@@ -57,7 +57,7 @@ jobs:
           EOF
 
   # NEW JOB (runs on your server)
-    ollama-test:
+  ollama-test:
     runs-on: self-hosted
     needs: build
 
