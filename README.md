@@ -1,4 +1,3 @@
-# helloworld-ant
 # Hybrid GitHub Actions with Self-Hosted Runner (Ollama Integration)
 
 ## Overview
@@ -21,16 +20,16 @@ This project implements a **hybrid CI/CD pipeline** using GitHub Actions where:
 
 ```
 GitHub Push
-    ↓
+    ⬇
 GitHub Actions Trigger
-    ↓
+    ⬇
 -----------------------------
-| Job 1 → GitHub VM        |
-| Job 2 → ENMU Server      |
+| Job 1 ⮕ GitHub VM        |
+| Job 2 ⮕ ENMU Server      |
 -----------------------------
-    ↓
+    ⬇
 Self-hosted runner executes Ollama locally
-    ↓
+    ⬇
 Results returned to GitHub
 ```
 
@@ -72,7 +71,7 @@ You should see installed models.
 Repository:
 
 ```
-Settings → Actions → Runners → New self-hosted runner
+Settings ⮕ Actions ⮕ Runners ⮕ New self-hosted runner
 ```
 
 Choose:
@@ -101,10 +100,10 @@ tar xzf actions-runner.tar.gz
 
 When prompted:
 
-- Runner group → press ENTER (Default)
-- Runner name → e.g. enmu-cs-server
-- Labels → optional (e.g. campus, ollama)
-- Work folder → press ENTER
+- Runner group ⮕ press ENTER (Default)
+- Runner name ⮕ e.g. enmu-cs-server
+- Labels ⮕ optional (e.g. campus, ollama)
+- Work folder ⮕ press ENTER
 
 ---
 
@@ -150,19 +149,19 @@ Create file:
 ### 9. Hybrid CI Pipeline
 
 ```yaml
-name: Hybrid CI
+name: Ant CI Full
 
 on:
   push:
     branches: [ main ]
+  pull_request:
 
 jobs:
-
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Java
@@ -171,37 +170,71 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Install Ant
-        run: sudo apt-get update && sudo apt-get install -y ant
+      - name: Install Ant, wget, unzip
+        run: sudo apt-get update && sudo apt-get install -y ant wget unzip
 
-      - name: Run tests
-        run: ant test
+      - name: Download Checkstyle
+        run: |
+          wget https://github.com/checkstyle/checkstyle/releases/download/checkstyle-10.12.4/checkstyle-10.12.4-all.jar
+          mv checkstyle-10.12.4-all.jar checkstyle.jar
 
+      - name: Run Checkstyle
+        run: |
+          mkdir -p reports
+          java -jar checkstyle.jar \
+            -c /google_checks.xml \
+            -f xml \
+            -o reports/checkstyle.xml src || true
 
-  ollama:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: |
+          if [ -f requirements.txt ]; then
+              pip install -r requirements.txt
+          fi
+
+      - name: Send Feedback Email
+        if: always()
+        env:
+          GMAIL_USER: alarusie@gmail.com
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+        run: |
+          python <<'EOF'
+          # (unchanged email script)
+          EOF
+
+  # NEW JOB (runs on your server)
+  ollama-test:
     runs-on: self-hosted
     needs: build
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Check Ollama models
-        run: curl http://localhost:11434/api/tags
+      - name: Test API server health
+        run: curl http://10.243.109.249:8000/docs
 
-      - name: Run Ollama prompt
+      - name: Generate Python code (Binary Search via API)
         run: |
-          curl http://localhost:11434/api/generate \
+          curl -X POST http://10.243.109.249:8000/create \
+          -H "Content-Type: application/json" \
           -d '{
-            "model": "mistral",
-            "prompt": "Explain continuous integration in simple terms"
-          }' > ollama_output.json
+            "prompt": "Write a Python implementation of the binary search algorithm."
+          }' > generated_code.json
 
-      - name: Upload result
+      - name: Show generated code
+        run: cat generated_code.json
+
+      - name: Upload Ollama API output
         uses: actions/upload-artifact@v4
         with:
-          name: ollama-output
-          path: ollama_output.json
+          name: ollama-api-output
+          path: generated_code.json
 ```
 
 ---
@@ -210,7 +243,7 @@ jobs:
 
 ```bash
 git add .
-git commit -m "Add hybrid CI pipeline with Ollama"
+git commit -m "Add hybrid CI pipeline with Ollama."
 git push
 ```
 
@@ -224,50 +257,8 @@ git push
 2. GitHub triggers workflow
 3. Job 1 runs on GitHub VM
 4. Job 2 is queued for self-hosted runner
-5. Runner on ENMU server pulls job
+5. Runner Agent on ENMU server pulls job
 6. Executes locally with Ollama
 7. Sends results back to GitHub
 
----
-
-## Important Notes
-
-### Security
-- Only trusted workflows should run on self-hosted runner
-- Avoid running untrusted pull requests
-
-Recommended trigger:
-
-```yaml
-on:
-  push:
-    branches: [ main ]
-```
-
----
-
-## Result
-
-You now have a hybrid system where:
-
-- GitHub handles CI orchestration
-- Cloud VM handles builds and testing
-- ENMU server handles AI inference (Ollama)
-- Results are stored in GitHub artifacts
-
----
-
-## Final Architecture
-
-```
-GitHub Actions (Orchestrator)
-        ↓
-Cloud Runner → Build/Test
-        ↓
-Self-hosted Runner (ENMU Server)
-        ↓
-Ollama AI Execution
-        ↓
-Artifacts → GitHub
-```
 
