@@ -57,27 +57,31 @@ jobs:
           EOF
 
   # NEW JOB (runs on your server)
-  ollama-test:
+    ollama-test:
     runs-on: self-hosted
-    needs: build   # waits for build to finish
+    needs: build
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Test Ollama connection
-        run: curl http://localhost:11434/api/tags
+      - name: Test API server health
+        run: curl http://10.243.109.249:8000/docs
 
-      - name: Run phi3.5 prompt
+      - name: Generate Python code (Binary Search via API)
         run: |
-          curl http://localhost:11434/api/generate \
+          curl -X POST http://10.243.109.249:8000/create \
+          -H "Content-Type: application/json" \
           -d '{
-            "model": "phi3.5",
-            "prompt": "Summarize the purpose of automated grading in programming courses"
-          }' > ollama_output.json
+            "prompt": "Write a Python implementation of binary search algorithm"
+          }' > generated_code.json
 
-      - name: Upload Ollama output
+      - name: Show generated code
+        run: cat generated_code.json
+
+      - name: Upload Ollama API output
         uses: actions/upload-artifact@v4
         with:
-          name: ollama-output
-          path: ollama_output.json
+          name: ollama-api-output
+          path: generated_code.json
+
