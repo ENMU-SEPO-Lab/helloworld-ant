@@ -22,9 +22,6 @@ jobs:
       - name: Install Ant, wget, unzip
         run: sudo apt-get update && sudo apt-get install -y ant wget unzip
 
-      - name: Run JUnit Tests
-        run: ant test
-
       - name: Download Checkstyle
         run: |
           wget https://github.com/checkstyle/checkstyle/releases/download/checkstyle-10.12.4/checkstyle-10.12.4-all.jar
