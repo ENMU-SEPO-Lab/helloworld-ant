@@ -66,11 +66,11 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Test API server health
-        run: curl http://10.243.109.249:8000/docs
+        run: curl http://10.212.121.95:8000/docs
 
       - name: Generate Python code (Binary Search via API)
         run: |
-          curl -X POST http://10.243.109.249:8000/create \
+          curl -X POST http://10.212.121.95:8000/review \
           -H "Content-Type: application/json" \
           -d '{
             "prompt": "Write a Python implementation of binary search algorithm"
