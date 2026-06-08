@@ -1,264 +1,454 @@
-# Hybrid GitHub Actions with Self-Hosted Runner (Ollama Integration)
+# Hybrid GitHub Actions with Self-Hosted Ollama API Server
 
 ## Overview
 
-This project implements a **hybrid CI/CD pipeline** using GitHub Actions where:
+This project demonstrates how to integrate a locally hosted Ollama LLM server with GitHub Actions using:
 
-- **Job 1 (Cloud)** runs on GitHub-hosted runners for:
-  - Build
-  - Unit tests (JUnit)
-  - Code quality checks
+- A self-hosted GitHub Actions runner
+- A custom FastAPI API wrapper (`server.py`)
+- Ollama running locally on a Linux server
+- GitHub Actions sending prompts to the LLM API
 
-- **Job 2 (Local Server)** runs on a self-hosted runner on an ENMU server for:
-  - AI inference using Ollama
-  - Local model execution
-  - Experimentation and analysis tasks
+This architecture allows:
 
----
-
-## Architecture
-
-```
-GitHub Push
-    ⬇
-GitHub Actions Trigger
-    ⬇
------------------------------
-| Job 1 ⮕ GitHub VM        |
-| Job 2 ⮕ ENMU Server      |
------------------------------
-    ⬇
-Self-hosted runner executes Ollama locally
-    ⬇
-Results returned to GitHub
-```
+- AI-powered code review
+- AI-generated code
+- Local/private inference
+- No dependency on external paid APIs
+- Research experimentation with local LLMs
 
 ---
 
-## Part 1 — Server Setup
+# Final Architecture
 
-### 1. SSH into server
+```text
+GitHub Push / Pull Request
+            ↓
+GitHub Actions Workflow
+            ↓
+----------------------------------
+| GitHub Hosted Runner           |
+| or Self-hosted Runner          |
+----------------------------------
+            ↓
+Custom FastAPI API (server.py)
+            ↓
+Ollama Local API
+            ↓
+phi3.5 / mistral / codellama
+            ↓
+LLM Response
+            ↓
+GitHub Actions Logs / PR Comments
+```
+
+---
+
+# Step 0 — Create Python Environment
 
 ```bash
-ssh your_user@your_server
+python3 -m venv venv
+source venv/bin/activate
 ```
 
 ---
 
-### 2. Install dependencies
+# Step 1 — Install Ollama
 
 ```bash
-sudo apt update
-sudo apt install -y curl git
+curl -fsSL https://ollama.com/install.sh | sh
 ```
 
----
-
-### 3. Verify Ollama installation
+Verify:
 
 ```bash
-curl http://localhost:11434/api/tags
+ollama --version
 ```
-
-You should see installed models.
 
 ---
 
-## Part 2 — Create GitHub Runner
+# Step 2 — Start Ollama
 
-### 4. Navigate to GitHub
-
-Repository:
-
+```bash
+ollama serve
 ```
-Settings ⮕ Actions ⮕ Runners ⮕ New self-hosted runner
-```
-
-Choose:
-- Linux
-- x64
 
 ---
 
-### 5. Download runner (on server)
+# Step 3 — Download Models
+
+```bash
+ollama pull phi3.5
+ollama pull mistral
+ollama pull codellama
+```
+
+List models:
+
+```bash
+ollama list
+```
+
+---
+
+# Step 4 — Test Ollama
+
+```bash
+curl http://localhost:11434/api/generate -d '{
+  "model": "phi3.5",
+  "prompt": "hello",
+  "stream": false
+}'
+```
+
+---
+
+# Step 5 — Install Python Dependencies
+
+```bash
+pip install fastapi uvicorn requests
+```
+
+Verify:
+
+```bash
+python -m uvicorn --version
+```
+
+---
+
+# Step 6 — Create Project Folder
+
+```bash
+mkdir -p ~/workspace/exposed_ollama
+cd ~/workspace/exposed_ollama
+```
+
+---
+
+# Step 7 — Create `server.py`
+
+```python
+from fastapi import FastAPI, Request, HTTPException
+import requests
+import re
+
+app = FastAPI()
+
+API_KEY = "your_secret_key"
+
+OLLAMA_URL = "http://localhost:11434/api/generate"
+
+CREATE_MODEL = "phi3.5"
+REVIEW_MODEL = "mistral"
+
+
+def call_llm(prompt, model):
+    payload = {
+        "model": model,
+        "prompt": prompt,
+        "stream": False
+    }
+
+    response = requests.post(OLLAMA_URL, json=payload)
+    response.raise_for_status()
+
+    return response.json()["response"]
+
+
+def extract_code(text):
+    match = re.search(r"```(?:python)?\n(.*?)```", text, re.DOTALL)
+
+    if match:
+        return match.group(1).strip()
+
+    return text.strip()
+
+
+@app.post("/create")
+async def create_code(request: Request):
+
+    if request.headers.get("Authorization") != f"Bearer {API_KEY}":
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    data = await request.json()
+
+    prompt = data.get("prompt")
+
+    full_prompt = f"""
+You are an expert software engineer.
+
+Generate code only.
+
+Do not explain anything.
+
+Task:
+{prompt}
+"""
+
+    result = call_llm(full_prompt, CREATE_MODEL)
+
+    return {
+        "code": extract_code(result)
+    }
+
+
+@app.post("/review")
+async def review_code(request: Request):
+
+    if request.headers.get("Authorization") != f"Bearer {API_KEY}":
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    data = await request.json()
+
+    code = data.get("code")
+
+    full_prompt = f"""
+You are a senior software engineer.
+
+Review this code carefully.
+
+Focus on:
+- bugs
+- edge cases
+- readability
+- performance
+- security
+- maintainability
+
+Code:
+{code}
+"""
+
+    result = call_llm(full_prompt, REVIEW_MODEL)
+
+    return {
+        "review": result
+    }
+```
+
+---
+
+# Step 8 — Test API Server
+
+```bash
+python -m uvicorn server:app --host 0.0.0.0 --port 8000
+```
+
+Test:
+
+```bash
+curl -X POST http://localhost:8000/create \
+  -H "Authorization: Bearer your_secret_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Write Python quicksort"
+  }'
+```
+
+---
+
+# Step 9 — Create systemd Service
+
+```bash
+sudo nano /etc/systemd/system/llm-api.service
+```
+
+Paste:
+
+```ini
+[Unit]
+Description=LLM FastAPI Server
+After=network.target ollama.service
+Requires=ollama.service
+
+[Service]
+User=your_username
+WorkingDirectory=/home/your_username/workspace/exposed_ollama
+ExecStart=/home/your_username/workspace/exposed_ollama/venv/bin/python -m uvicorn server:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+---
+
+# Step 10 — Enable Service
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable llm-api
+sudo systemctl start llm-api
+sudo systemctl status llm-api
+```
+
+---
+
+# Step 11 — Open Firewall
+
+```bash
+sudo ufw allow 8000
+```
+
+---
+
+# Step 12 — Create GitHub Self-Hosted Runner
+
+Go to:
+
+```text
+Settings → Actions → Runners → New self-hosted runner
+```
+
+Install runner:
 
 ```bash
 mkdir actions-runner && cd actions-runner
 
-curl -o actions-runner.tar.gz -L https://github.com/actions/runner/releases/download/v2.333.1/actions-runner-linux-x64-2.333.1.tar.gz
+curl -o actions-runner.tar.gz -L \
+https://github.com/actions/runner/releases/download/v2.333.1/actions-runner-linux-x64-2.333.1.tar.gz
 
 tar xzf actions-runner.tar.gz
 ```
 
----
-
-### 6. Configure runner
+Configure:
 
 ```bash
 ./config.sh --url https://github.com/YOUR_REPO --token YOUR_TOKEN
 ```
 
-When prompted:
-
-- Runner group ⮕ press ENTER (Default)
-- Runner name ⮕ e.g. enmu-cs-server
-- Labels ⮕ optional (e.g. campus, ollama)
-- Work folder ⮕ press ENTER
-
----
-
-### 7. Start runner
+Run:
 
 ```bash
 ./run.sh
 ```
 
-You should see:
-
-```
-Listening for Jobs
-```
-
----
-
-### 8. Install as service (recommended)
+Install as service:
 
 ```bash
 sudo ./svc.sh install
 sudo ./svc.sh start
 ```
 
-Check status:
-
-```bash
-sudo ./svc.sh status
-```
-
 ---
 
-## Part 3 — GitHub Workflow Setup
+# Step 13 — GitHub Workflow Example
 
-Create file:
+Create:
 
+```text
+.github/workflows/llm-review.yml
 ```
-.github/workflows/ci.yml
-```
-
----
-
-### 9. Hybrid CI Pipeline
 
 ```yaml
-name: Ant CI Full
+name: LLM Code Review
 
 on:
-  push:
-    branches: [ main ]
   pull_request:
 
 jobs:
+
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
+      - name: Build Step
+        run: echo "Building project..."
 
-      - name: Install Ant, wget, unzip
-        run: sudo apt-get update && sudo apt-get install -y ant wget unzip
-
-      - name: Download Checkstyle
-        run: |
-          wget https://github.com/checkstyle/checkstyle/releases/download/checkstyle-10.12.4/checkstyle-10.12.4-all.jar
-          mv checkstyle-10.12.4-all.jar checkstyle.jar
-
-      - name: Run Checkstyle
-        run: |
-          mkdir -p reports
-          java -jar checkstyle.jar \
-            -c /google_checks.xml \
-            -f xml \
-            -o reports/checkstyle.xml src || true
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install Python dependencies
-        run: |
-          if [ -f requirements.txt ]; then
-              pip install -r requirements.txt
-          fi
-
-      - name: Send Feedback Email
-        if: always()
-        env:
-          GMAIL_USER: alarusie@gmail.com
-          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-        run: |
-          python <<'EOF'
-          # (unchanged email script)
-          EOF
-
-  # NEW JOB (runs on your server)
-  ollama-test:
+  llm-review:
     runs-on: self-hosted
     needs: build
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Test API server health
+      - name: Verify API Health
         run: curl http://10.243.109.249:8000/docs
 
-      - name: Generate Python code (Binary Search via API)
+      - name: Generate Code
         run: |
           curl -X POST http://10.243.109.249:8000/create \
+          -H "Authorization: Bearer ${{ secrets.LLM_API_KEY }}" \
           -H "Content-Type: application/json" \
           -d '{
-            "prompt": "Write a Python implementation of the binary search algorithm."
-          }' > generated_code.json
+            "prompt": "Write Python quicksort"
+          }' > generated.json
 
-      - name: Show generated code
-        run: cat generated_code.json
+      - name: Show Generated Code
+        run: cat generated.json
 
-      - name: Upload Ollama API output
-        uses: actions/upload-artifact@v4
-        with:
-          name: ollama-api-output
-          path: generated_code.json
+      - name: Review Code
+        run: |
+          CODE=$(cat generated.json)
+
+          curl -X POST http://10.243.109.249:8000/review \
+          -H "Authorization: Bearer ${{ secrets.LLM_API_KEY }}" \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"code\": \"$CODE\"
+          }" > review.json
+
+      - name: Show Review
+        run: cat review.json
 ```
 
 ---
 
-## Part 4 — Push and Test
+# Step 14 — Add GitHub Secret
+
+Go to:
+
+```text
+Settings → Secrets and Variables → Actions
+```
+
+Create:
+
+```text
+LLM_API_KEY
+```
+
+Value:
+
+```text
+your_secret_key
+```
+
+---
+
+# Useful Commands
+
+Restart Ollama:
 
 ```bash
-git add .
-git commit -m "Add hybrid CI pipeline with Ollama."
-git push
+sudo systemctl restart ollama
+```
+
+Restart API:
+
+```bash
+sudo systemctl restart llm-api
+```
+
+View logs:
+
+```bash
+sudo journalctl -u llm-api -f
 ```
 
 ---
 
-## Part 5 — How It Works
+# Recommended Improvements
 
-### Execution Flow
-
-1. Developer pushes code
-2. GitHub triggers workflow
-3. Job 1 runs on GitHub VM
-4. Job 2 is queued for self-hosted runner
-5. Runner Agent on ENMU server pulls job
-6. Executes locally with Ollama
-7. Sends results back to GitHub
-
-
+- Add HTTPS using Nginx + Let's Encrypt
+- Add rate limiting using slowapi
+- Add logging
+- Add automatic PR comments
+- Use separate models:
+  - create → phi3.5
+  - review → mistral
+  - advanced review → codellama
