@@ -163,83 +163,86 @@ import requests
 
 app = FastAPI()
 
+# Ollama configuration
+OLLAMA_URL = "http://localhost:11434/api/generate"
+MODEL = "phi3.5"
+
+# Simple API key protection (optional ionly if needed)
 API_KEY = "your_secret_key"
 
-OLLAMA_URL = "http://localhost:11434/api/generate"
 
-CREATE_MODEL = "phi3.5"
-REVIEW_MODEL = "mistral"
-
-def call_llm(model_name, prompt):
+def call_llm(prompt: str):
     payload = {
-        "model": model_name,
+        "model": MODEL,
         "prompt": prompt,
-        "stream": False
+        "stream": False,
+        "options": {
+            "num_predict": 300
+        }
     }
-
     response = requests.post(OLLAMA_URL, json=payload)
-    return response.json()
 
+    if response.status_code != 200:
+        raise HTTPException(status_code=500, detail="LLM request failed")
+
+    return response.json()["response"]
+
+
+# API: CREATE CODE ENDPOINT
 @app.post("/create")
 async def create_code(request: Request):
-
-    if request.headers.get("Authorization") != f"Bearer {API_KEY}":
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
     data = await request.json()
     prompt = data.get("prompt")
 
-    full_prompt = f"""
-You are an expert software engineer.
+    if not prompt:
+        raise HTTPException(status_code=400, detail="Missing prompt")
 
-Generate code only.
-Do not provide explanations.
-Do not use markdown.
+    full_prompt = f"""
+You are a code generator.
+
+Return ONLY valid code.
+No explanation.
+No comments.
+No markdown.
 
 Task:
 {prompt}
-"""
+    """
 
-    result = call_llm(CREATE_MODEL, full_prompt)
+    result = call_llm(full_prompt)
 
-    return {
-        "response": result.get("response", "").strip()
-    }
+    return {"result": result}
 
+
+# API: REVIEW CODE ENDPOINT
 @app.post("/review")
 async def review_code(request: Request):
-
-    if request.headers.get("Authorization") != f"Bearer {API_KEY}":
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
     data = await request.json()
-
     code = data.get("code")
 
+    if not code:
+        raise HTTPException(status_code=400, detail="Missing code")
+
     full_prompt = f"""
-You are a senior software engineer.
+You are a senior engineer.
 
-Review the following code for:
+Be concise.
 
-- bugs
-- readability
-- performance
-- edge cases
-- security
+Return:
+- bugs (bullet points)
+- improvements (bullet points)
+- final corrected code only
 
-Provide:
-1. Explanation
-2. Improved code
+Do not explain in paragraphs.
 
 Code:
 {code}
-"""
+    """
 
-    result = call_llm(REVIEW_MODEL, full_prompt)
+    result = call_llm(full_prompt)
 
-    return {
-        "response": result.get("response", "").strip()
-    }
+    return {"result": result}
+
 ```
 
 ---

@@ -70,7 +70,7 @@ jobs:
 
       - name: Generate Python code (Binary Search via API)
         run: |
-          curl -X POST http://10.212.121.95:8000/review \
+          curl -X POST http://10.212.121.95:8000/create \
           -H "Authorization: Bearer your_secret_key" \
           -H "Content-Type: application/json" \
           -d '{
