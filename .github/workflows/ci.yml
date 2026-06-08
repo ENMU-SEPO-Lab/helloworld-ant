@@ -71,10 +71,15 @@ jobs:
       - name: Generate Python code (Binary Search via API)
         run: |
           curl -X POST http://10.212.121.95:8000/review \
+          -H "Authorization: Bearer your_secret_key" \
           -H "Content-Type: application/json" \
-          -d '{
-            "prompt": "Write a Python implementation of binary search algorithm"
-          }' > generated_code.json
+          -d '{"prompt": "hello"}' > generated_code.json
+          # curl -X POST http://10.212.121.95:8000/review \
+          # -H "Authorization: Bearer your_secret_key" \
+          # -H "Content-Type: application/json" \
+          # -d '{
+          #   "prompt": "Write a Python implementation of binary search algorithm"
+          # }' > generated_code.json
 
       - name: Show generated code
         run: cat generated_code.json
